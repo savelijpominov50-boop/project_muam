@@ -1,0 +1,36 @@
+auditbeat.modules:
+- module: auditd
+  audit_rules: |
+    -D
+    -b 8192
+    --failure 1
+    -a always,exit -F arch=b64 -S execve -k user_commands
+    -a always,exit -F arch=b32 -S execve -k user_commands
+    -w /hostfs/etc/passwd -p wa -k identity_changes
+    -w /hostfs/etc/shadow -p wa -k security_alert
+    -w /hostfs/etc/sudoers -p wa -k privilege_changes
+
+- module: file_integrity
+  paths:
+  - /hostfs/etc/passwd
+  - /hostfs/etc/shadow
+  - /hostfs/etc/sudoers
+  - /hostfs/etc/sudoers.d
+  scan_at_start: true
+  scan_rate_per_sec: 50 MiB
+  max_file_size: 100 MiB
+  hash_types: [sha256]
+  recursive: true
+
+output.elasticsearch:
+  hosts: ["http://elasticsearch:9200"]
+  username: "elastic"
+  password: "${ELASTIC_PASSWORD}"
+
+logging.level: info
+logging.to_files: true
+logging.files:
+  path: /usr/share/auditbeat/logs
+  name: auditbeat
+  keepfiles: 7
+  permissions: 0640

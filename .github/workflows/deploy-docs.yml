@@ -1,0 +1,14 @@
+name: Deploy Documentation
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'docs/**'
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fake Build Step (Replace with MkDocs/Hugo)
+        run: echo "Docs deployed to gh-pages"

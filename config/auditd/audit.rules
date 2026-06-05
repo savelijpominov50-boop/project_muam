@@ -1,0 +1,12 @@
+-D
+-b 8192
+--failure 1
+-a always,exit -F arch=b64 -S execve -k user_commands
+-a always,exit -F arch=b32 -S execve -k user_commands
+-w /etc/passwd -p wa -k identity_changes
+-w /etc/shadow -p wa -k security_alert
+-w /etc/sudoers -p wa -k privilege_changes
+-w /etc/sudoers.d/ -p wa -k privilege_changes
+-a always,exit -F arch=b64 -S mount -S umount2 -k storage_mounts
+-a always,exit -F arch=b32 -S mount -S umount2 -k storage_mounts
+-e 1

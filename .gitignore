@@ -1,0 +1,12 @@
+.env
+*.pem
+*.key
+*.log
+logs/
+__pycache__/
+.DS_Store
+.idea/
+.vscode/
+*~
+thesis/report.pdf
+thesis/slides.pdf
