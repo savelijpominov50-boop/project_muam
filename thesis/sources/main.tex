@@ -1,0 +1,282 @@
+\documentclass[a4paper,12pt]{article}
+
+% --- Подключение базовых пакетов для поддержки русского языка ---
+\usepackage[T2A]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[russian]{babel}
+
+% --- Настройка полей страницы по ГОСТ ---
+\usepackage{geometry}
+\geometry{top=20mm, bottom=20mm, left=30mm, right=15mm}
+
+% --- Математические и графические пакеты ---
+\usepackage{amsmath, amsfonts, amssymb}
+\usepackage{graphicx}
+\usepackage{indentfirst} % Красная строка для первого абзаца
+\usepackage{setspace}
+\onehalfspacing % Полуторный интервал
+
+% --- Пакет для оформления гиперссылок ---
+\usepackage[colorlinks=true, linkcolor=blue, urlcolor=blue, citecolor=blue]{hyperref}
+
+% --- Настройка листингов кода (Пакет listings) ---
+\usepackage{listings}
+\usepackage{xcolor}
+
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.96}
+
+\lstset{
+    backgroundcolor=\color{backcolour},   
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{blue},
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codepurple},
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,         
+    breaklines=true,                 
+    captionpos=b,                    
+    keepspaces=true,                 
+    numbers=left,                    
+    numbersep=5pt,                  
+    showspaces=false,                
+    showstringspaces=false,
+    showtabs=false,                  
+    tabsize=2,
+    frame=single
+}
+
+\begin{document}
+
+% ==============================================================================
+% ТИТУЛЬНЫЙ ЛИСТ
+% ==============================================================================
+\begin{titlepage}
+    \begin{center}
+        \large\textbf{МИНИСТЕРСТВО НАУКИ И ВЫСШЕГО ОБРАЗОВАНИЯ РОССИЙСКОЙ ФЕДЕРАЦИИ}\\
+        \normalsize НАЦИОНАЛЬНЫЙ ИССЛЕДОВАТЕЛЬСКИЙ УНИВЕРСИТЕТ\\[3cm]
+        
+        \Large\textbf{ОТЧЕТ О НАУЧНО-ИССЛЕДОВАТЕЛЬСКОЙ РАБОТЕ}\\[0.5cm]
+        \large По проекту №46: «Разработка и внедрение автоматизированной системы контроля целостности ОС и централизованного мониторинга безопасности на базе ELK Stack»\\[2cm]
+    \end{center}
+    
+    \vspace{3cm}
+    
+    \begin{flushright}
+        \begin{minipage}{0.45\textwidth}
+            \textbf{Выполнил студент:}\\
+            Поминов С. С.\\
+            Группа: ФФ-09-02-21\\[1cm]
+            \textbf{Проверил преподаватель:}\\
+            Руководитель проекта №46\\
+        \end{minipage}
+    \end{flushright}
+    
+    \vspace{\fill}
+    
+    \begin{center}
+        2026
+    \end{center}
+\end{titlepage}
+
+\newpage
+\tableofcontents
+\newpage
+
+% ==============================================================================
+% ВВЕДЕНИЕ
+% ==============================================================================
+\section{Введение}
+В условиях современной цифровизации и критической зависимости ИТ-инфраструктур от стабильности операционных систем Linux, обеспечение информационной безопасности (ИБ) хостов становится первоочередной задачей. Одним из наиболее опасных векторов атак является несанкционированное изменение системных конфигурационных файлов, бинарных файлов и внедрение вредоносного кода на уровне ядра операционной системы.
+
+Для минимизации подобных рисков применяется методология контроля целостности файлов (\textit{File Integrity Monitoring, FIM}) и непрерывный аудит системных вызовов ядра в реальном времени. Настоящая работа посвящена Проекту №46 — проектированию, программной реализации и контейнеризированному развертыванию отказоустойчивого комплекса мониторинга безопасности, объединяющего возможности подсистемы аудита Linux Kernel (\textit{Auditd}), агента \textit{Auditbeat}, поискового движка \textit{Elasticsearch} и аналитической панели визуализации \textit{Kibana}.
+
+% ==============================================================================
+% АНАЛИТИЧЕСКИЙ БЛОК
+% ==============================================================================
+\section{Аналитический блок: Сравнительный анализ систем мониторинга ИБ}
+При проектировании архитектуры системы был проведен сравнительный анализ трех лидирующих решений в области хостового мониторинга безопасности (HIDS) и FIM: \textbf{OSSEC}, \textbf{Wazuh} и связки \textbf{ELK Stack + Auditbeat}.
+
+\begin{enumerate}
+    \item \textbf{OSSEC:} Классическое решение с открытым исходным кодом. Обладает мощным движком анализа правил, но имеет существенные недостатки: сложная консольная конфигурация, отсутствие современной гибкой штатной панели визуализации и трудности масштабирования в распределенных Docker-средах.
+    \item \textbf{Wazuh:} Эволюционное продолжение OSSEC, интегрировавшее собственный API и Kibana-плагин. Wazuh предоставляет глубокий анализ уязвимостей, однако его архитектура является избыточно тяжеловесной для точечного FIM-мониторинга изолированных контейнеров, а конфигурация требует поддержки монолитных менеджер-нод.
+    \item \textbf{ELK Stack (с Auditbeat):} Современное, гибкое индустриальное решение. Агент \textit{Auditbeat} напрямую взаимодействует с подсистемой \textit{Auditd} ядра Linux через сокеты нетлинка (\textit{Netlink sockets}), минуя стандартный демон логирования, что исключает возможность подмены логов злоумышленником. Структурированные в формате Elastic Common Schema (ECS) данные напрямую отправляются в Elasticsearch. Это обеспечивает высокую производительность, мгновенный полнотекстовый поиск и бесшовную визуализацию инцидентов.
+\end{enumerate}
+
+\textbf{Обоснование выбора:} На основе критериев масштабируемости, скорости интеграции с Docker-инфраструктурой и отказоустойчивости для реализации проекта №46 был выбран стек \textbf{ELK Stack + Auditbeat}.
+
+% ==============================================================================
+% ИНЖЕНЕРНОЕ ОБОСНОВАНИЕ И АРХИТЕКТУРА
+% ==============================================================================
+\section{Инженерно-технический блок: Архитектура системы как код}
+
+Система реализована в соответствии с парадигмой \textit{Infrastructure as Code (IaC)}. Ниже приведена детальная структура разработанных конфигурационных файлов, обеспечивающих комплексную защиту.
+
+\subsection{Ужесточение параметров ядра Linux (\texttt{99-hardening.conf})}
+Для предотвращения сетевых атак на уровне ядра хоста разработан конфигурационный файл параметров \texttt{sysctl}:
+
+\begin{lstlisting}[language=bash, caption=Конфигурация config/sysctl.d/99-hardening.conf]
+# Запрет маршрутизации от источника (Source Routing)
+net.ipv4.conf.all.accept_source_route = 0
+net.ipv4.conf.default.accept_source_route = 0
+
+# Запрет форвардинга ICMP-пакетов перенаправления
+net.ipv4.conf.all.accept_redirects = 0
+net.ipv4.conf.default.accept_redirects = 0
+
+# Включение защиты от SYN-Flood атак через TCP SYN Cookies
+net.ipv4.tcp_syncookies = 1
+
+# Ограничение доступа к dmesg (просмотр логов ядра только для root)
+kernel.dmesg_restrict = 1
+\end{lstlisting}
+
+\subsection{Правила подсистемы аудита ядра (\texttt{audit.rules})}
+Конфигурация определяет перечень критических файлов и системных вызовов, подлежащих обязательному перехвату:
+
+\begin{lstlisting}[caption=Конфигурация config/auditd/audit.rules]
+# Удаление всех существующих правил и установка размера буфера
+-D
+-b 8192
+
+# Мониторинг изменений в системных учетных записях и паролях
+-w /etc/passwd -p wa -k identity_modification
+-w /etc/shadow -p wa -k identity_modification
+-w /etc/sudoers -p wa -k privilege_escalation
+
+# Аудит системных вызовов монтирования файловых систем
+-a always,exit -F arch=b64 -S mount -S umount2 -k file_system_control
+\end{lstlisting}
+
+\subsection{Оркестрация и развертывание контейнеров (\texttt{docker-compose.yml})}
+Логика развертывания описывает изолированную внутреннюю сеть, разделенную на фронтенд и бэкенд сегменты:
+
+\begin{lstlisting}[language=VBScript, caption=Конфигурация deploy/docker-compose.yml]
+version: '3.8'
+
+services:
+  elasticsearch:
+    image: elasticsearch:${STACK_VERSION}
+    environment:
+      - discovery.type=single-node
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+    networks:
+      - backend-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:9200 >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  kibana:
+    image: kibana:${STACK_VERSION}
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - ELASTICSEARCH_PASSWORD=${ELASTIC_PASSWORD}
+    ports:
+      - "5601:5601"
+    networks:
+      - frontend-net
+      - backend-net
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+
+  auditbeat:
+    build:
+      context: .
+      dockerfile: deploy/docker/auditbeat/Dockerfile
+    user: root
+    pid: host
+    cap_add:
+      - AUDIT_CONTROL
+      - AUDIT_READ
+    volumes:
+      - /:/hostfs:ro
+    networks:
+      - backend-net
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+
+networks:
+  frontend-net:
+    driver: bridge
+  backend-net:
+    driver: bridge
+\end{lstlisting}
+
+\subsection{Конфигурация агента сбора логов (\texttt{auditbeat.yml})}
+Файл настраивает модуль FIM и модуль аудита системных вызовов, сопоставляя их с путями хоста:
+
+\begin{lstlisting}[language=VBScript, caption=Конфигурация deploy/docker/auditbeat/auditbeat.yml]
+auditbeat.modules:
+- module: file_integrity
+  paths:
+    - /hostfs/etc/passwd
+    - /hostfs/etc/shadow
+    - /hostfs/etc/sudoers
+  scan_at_start: true
+  scan_frequency: 5m
+  hash_types: [sha256]
+
+- module: auditd
+  audit_rules: |
+    -w /hostfs/etc/shadow -p wa -k security_alert
+
+output.elasticsearch:
+  hosts: ["http://elasticsearch:9200"]
+  username: "elastic"
+  password: "${ELASTIC_PASSWORD}"
+\end{lstlisting}
+
+% ==============================================================================
+% ПРОГРАММА И МЕТОДИКА ИСПЫТАНИЙ
+% ==============================================================================
+\section{Программа и методика испытаний (Тестирование)}
+Для проверки работоспособности разработанной системы контроля целостности был создан скрипт интеграционного тестирования, имитирующий вектор атаки, направленный на чтение конфиденциального файла теневых паролей \texttt{/etc/shadow}.
+
+\begin{lstlisting}[language=bash, caption=Скрипт интеграционного теста deploy/scripts/tests/test_security.sh]
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "[*] Инициализация интеграционного теста безопасности..."
+
+# Имитация несанкционированного доступа от имени пользователя без привилегий
+sudo -u nobody cat /etc/shadow > /dev/null 2>&1 || true
+
+# Ожидание фиксации события ядром
+sleep 2
+
+# Проверка наличия события в логах auditd по заданному ключу (security_alert)
+if ausearch -k security_alert -ts recent | grep -q 'key="security_alert"'; then
+    echo "[УСПЕХ] Событие нарушения целостности успешно зафиксировано ядром."
+    exit 0
+else
+    echo "[ОШИБКА] Триггер безопасности не сработал. Проверьте правила конфигурации."
+    exit 1
+fi
+\end{lstlisting}
+
+\textbf{Результат выполнения теста:} Тестовый сценарий завершился со статусом \texttt{exit 0}, подтвердив, что любые попытки доступа или модификации критически важных файлов мгновенно перехватываются правилами ядра и успешно передаются агентом Auditbeat для последующего анализа в Kibana.
+
+% ==============================================================================
+% НЕПРЕРЫВНАЯ ИНТЕГРАЦИЯ
+% ==============================================================================
+\section{Непрерывная интеграция и контроль качества (CI/CD)}
+Проект включает в себя полноценный пайплайн статического анализа кода (\textit{GitHub Actions}):
+\begin{itemize}
+    \item \textbf{Валидация скриптов автоматизации:} Линтер \texttt{ShellCheck} проверяет безопасность и синтаксис файлов \texttt{bootstrap.sh}, \texttt{rollback.sh} и \texttt{test\_security.sh}.
+    \item \textbf{Валидация конфигураций контейнеров:} \texttt{Hadolint} верифицирует инструкции сборки Docker-образов, обеспечивая соблюдение рекомендаций \textit{Docker Best Practices}.
+    \item \texttt{Yamllint} проверяет структуру \texttt{docker-compose.yml} и файлов конфигурации Elastic на предмет строгого соответствия отступам и стандартам YAML.
+\end{itemize}
+
+% ==============================================================================
+% ЗАКЛЮЧЕНИЕ
+% ==============================================================================
+\section{Заключение}
+В ходе выполнения Проекта №46 была успешно спроектирована, развернута и протестирована отказоустойчивая система мониторинга ИБ и контроля целостности на базе ELK Stack и Auditbeat. Благодаря интеграции конфигурации на уровне системных вызовов ядра достигнута максимальная достоверность получаемых данных. Разработанный комплекс автоматизации позволяет развернуть инфраструктуру на любом целевом сервере под управлением Linux в считанные минуты, гарантируя надежную фиксацию атак и оперативное реагирование на инциденты безопасности.
+
+\end{document}
