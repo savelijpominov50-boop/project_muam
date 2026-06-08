@@ -1,0 +1,167 @@
+\documentclass[10pt,pdftex,aspectratio=169]{beamer}
+\usepackage[utf8]{inputenc}
+\usepackage[russian]{babel}
+\usepackage{listings}
+\usepackage{xcolor}
+
+% Настройка темы презентации (минималистичный строгий стиль)
+\usetheme{Madrid}
+\usecolortheme{whale}
+
+% Отключение элементов навигации для чистоты слайдов
+\setbeamertext{navigation symbols}{}
+
+% Настройки отображения листингов кода
+\listingsset{
+    basicstyle=\ttfamily\scriptsize,
+    breaklines=true,
+    frame=single,
+    backgroundcolor=\color{gray!5},
+    commentstyle=\color{gray},
+    keywordstyle=\bfseries\color{blue},
+    showstringspaces=false,
+    tabsize=2
+}
+
+\title[Контроль целостности Linux]{Разработка и внедрение системы контроля целостности файлов и непрерывного мониторинга операционной системы Linux}
+\subtitle{Курсовой проект по администрированию ОС Linux}
+\author[Поминов, Кудряшов]{Поминов Савелий Сергеевич \and Кудряшов Никита}
+\institute[Инженерная группа]{Физический факультет}
+\date{\today}
+
+\begin{document}
+
+% Слайд 1: Титульный
+\begin{frame}
+    \titlepage
+\end{frame}
+
+% Слайд 2: Проблематика и целеполагание
+\begin{frame}{Проблематика и целеполагание}
+    \begin{block}{Актуальность}
+        Традиционный анализ системных журналов \textit{постфактум} неэффективен против целевых атак, компрометирующих конфигурационные файлы за доли секунды.
+    \end{block}
+    \vfill
+    \begin{block}{Концепция и Цель}
+        Переход к парадигме \textbf{Zero Trust} («никому не доверяй, всегда проверяй»). Разработка и развертывание комплексной микросервисной SIEM-системы реального времени.
+    \end{block}
+    \vfill
+    \begin{itemize}
+        \item \textbf{Базовый стек:} Подсистема аудита \texttt{Auditd}
+        \item \textbf{Агенты сбора метрик:} \texttt{Auditbeat} (модуль FIM)
+        \item \textbf{Центральное аналитическое ядро:} \texttt{ELK Stack} (Elasticsearch, Kibana)
+    \end{itemize}
+\end{frame}
+
+% Слайд 3: Командное взаимодействие и распределение ролей
+\begin{frame}{Распределение зон ответственности}
+    \begin{columns}[t]
+        \begin{column}{0.5\textwidth}
+            \begin{block}{Поминов Савелий Сергеевич}
+                \textbf{Tech Lead / Systems Administrator}
+                \begin{itemize}
+                    \item Проектирование распределенной архитектуры комплекса.
+                    \item Низкоуровневая оптимизация и системный харднинг хост-платформы.
+                    \item Координация интеграции модулей и финальное тестирование.
+                    \item Ведение сквозной технической документации.
+                \end{itemize}
+            \end{block}
+        \end{column}
+        \begin{column}{0.5\textwidth}
+            \begin{block}{Кудряшов Никита}
+                \textbf{DevOps / Security Engineer}
+                \begin{itemize}
+                    \item Построение контейнерной фабрики на базе Docker Compose.
+                    \item Организация изолированных виртуальных сетей.
+                    \item Разработка гранулярных правил \texttt{audit.rules}.
+                    \item Конфигурирование политик контроля целостности (FIM).
+                    \item Автоматизация тестов безопасности.
+                \end{itemize}
+            \end{block}
+        \end{column}
+    \end{columns}
+\end{frame}
+
+% Слайд 4: Архитектура платформы и механизмы контроля
+\begin{frame}{Архитектура платформы и механизмы контроля}
+    \begin{itemize}
+        \item \textbf{Перехват на уровне ядра:} Фиксация низкоуровневых системных вызовов (\textit{syscalls}): \texttt{execve}, \texttt{openat}, \texttt{chmod}.
+        \item \textbf{Мониторинг целостности (FIM):} Непрерывное фоновое сканирование директорий \texttt{/etc/shadow}, \texttt{/etc/passwd}. При изменении — мгновенное вычисление хэш-суммы \textbf{SHA-256} и сравнение с эталоном.
+        \item \textbf{Конвейер обработки данных:}
+    \end{itemize}
+    \begin{center}
+        \boxed{\text{Ядро Linux (Auditd)}} $\longrightarrow$ \boxed{\text{Агент Auditbeat (JSON)}} $\longrightarrow$ \boxed{\text{СУБД Elasticsearch}} $\longrightarrow$ \boxed{\text{Панель Kibana}}
+    \end{center}
+\end{frame}
+
+% Слайд 5: Декларативное развертывание и контейнеризация
+\begin{frame}[fragile]{Декларативное развертывание (IaC)}
+    \begin{block}{Решение проблемы изоляции агента безопасности в контейнере}
+        Использование директивы \texttt{pid: host} и проброс гранулярных привилегий (\texttt{cap\_add}) для прямого взаимодействия с подсистемой аудита хоста.
+    \end{block}
+\begin{lstlisting}[language=yaml, caption=Фрагмент deploy/docker-compose.yml]
+services:
+  auditbeat:
+    build: context: ./docker/auditbeat
+    user: root
+    pid: host
+    cap_add:
+      - AUDIT_CONTROL
+      - AUDIT_READ
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /:/hostfs:ro
+\end{lstlisting}
+\end{frame}
+
+% Слайд 6: Системный харднинг и оптимизация Linux
+\begin{frame}[fragile]{Системный харднинг и оптимизация Linux}
+    \begin{block}{Устранение рисков дефицита памяти и отказов СУБД (OOM Killer)}
+        Глубокая настройка параметров ядра через конфигурационный файл \texttt{/etc/sysctl.d/99-hardening.conf}.
+    \end{block}
+\begin{lstlisting}[language=bash, caption=Конфигурация параметров ядра host-системы]
+# Расширение областей карты памяти для стабильной работы Elasticsearch
+vm.max_map_count=262144
+
+# Запрет создания дампов памяти ядра для защиты чувствительных данных
+fs.suid_dumpable=0
+
+# Защита сетевого стека от атак типа TCP SYN Flood
+net.ipv4.tcp_syncookies=1
+\end{lstlisting}
+    \begin{block}{Сетевая изоляция}
+        Периметр защищен брандмауэром \texttt{UFW}. Внешний доступ ограничен только веб-интерфейсом Kibana (\texttt{5601}) и защищенным SSH-каналом.
+    \end{block}
+\end{frame}
+
+% Слайд 7: Испытания системы и симуляция угроз
+\begin{frame}[fragile]{Испытания системы и симуляция угроз}
+    \begin{block}{Автоматизация контроля работоспособности (test\_security.sh)}
+        Сценарий имитирует вектор атаки от имени скомпрометированной учетной записи \texttt{nobody}.
+    \end{block}
+\begin{lstlisting}[language=bash]
+# Попытка несанкционированного чтения базы хэшей паролей
+su -s /bin/bash nobody -c "cat /etc/shadow" || true
+
+# Попытка внедрения вредоносной задачи в планировщик cron
+su -s /bin/bash nobody -c "touch /etc/cron.d/malicious_job" || true
+
+# Проверка индексации и доставки события в SIEM
+curl -s -u elastic:${ELASTIC_PASSWORD} "http://localhost:9200/auditbeat-*/_search?q=user.name:nobody" | grep -q "nobody"
+\end{lstlisting}
+    \textbf{Результат:} Ядро генерирует прерывание, правила \texttt{audit.rules} маркируют инцидент, и угроза отображается в Kibana менее чем за 1 секунду.
+\end{frame}
+
+% Слайд 8: Заключение
+\begin{frame}{Заключение}
+    \begin{block}{Результаты реализации проекта}
+        \begin{itemize}
+            \item \textbf{Высокая производительность:} Разработан и протестирован функционирующий прототип легковесной SIEM-системы корпоративного класса.
+            \item \textbf{Абсолютная воспроизводимость:} Инфраструктура разворачивается в один клик благодаря строгому следованию методологии IaC.
+            \item \textbf{Отказоустойчивость:} Оптимизация параметров ядра Linux позволила полностью исключить аварийные остановки контейнеров СУБД.
+            \item \textbf{Автономность:} Платформа успешно прошла стресс-тесты, доказала надежность ведения гранулярного аудита и готова к промышленной эксплуатации.
+        \end{itemize}
+    \end{block}
+\end{frame}
+
+\end{document}
